@@ -1,0 +1,11 @@
+# ansible/roles/app_server/handlers/main.yml
+---
+- name: Restart apache2
+  ansible.builtin.service:
+    name: apache2
+    state: restarted
+
+- name: Restart autofs
+  ansible.builtin.service:
+    name: autofs
+    state: restarted

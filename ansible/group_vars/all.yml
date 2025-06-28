@@ -1,0 +1,5 @@
+# ansible/group_vars/all.yml
+
+nome1: "Nilson"
+nome2: "Wellington"
+

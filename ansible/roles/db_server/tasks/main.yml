@@ -1,0 +1,36 @@
+# ansible/roles/db_server/tasks/main.yml
+---
+- name: Install mariadb-server
+  ansible.builtin.apt:
+    name: mariadb-server
+    state: present
+
+- name: Install autofs
+  ansible.builtin.apt:
+    name: autofs
+    state: present
+
+- name: Ensure /etc/auto.master.d directory exists
+  ansible.builtin.file:
+    path: /etc/auto.master.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Ensure NFS mount point /var/nfs exists
+  ansible.builtin.file:
+    path: /var/nfs
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+
+- name: Configure autofs for NFS mount
+  ansible.builtin.copy:
+    content: "/var/nfs -fstype=nfs,rw,sync 192.168.56.1{{ matricula1_ultimos_digitos }}:/dados/nfs" # Usar o IP do servidor ARQ
+    dest: /etc/auto.master.d/nfs_mount.autofs
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart autofs

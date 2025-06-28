@@ -1,0 +1,19 @@
+# ansible/roles/arq_server/handlers/main.yml
+---
+- name: Restart isc-dhcp-server
+  ansible.builtin.service:
+    name: isc-dhcp-server
+    state: restarted
+
+- name: Vg change
+  ansible.builtin.debug:
+    msg: "Volume Group (VG) changed. A reboot might be needed for some changes to take effect."
+
+- name: Lv change
+  ansible.builtin.debug:
+    msg: "Logical Volume (LV) changed. Filesystem operations will follow."
+
+- name: Restart nfs-kernel-server
+  ansible.builtin.service:
+    name: nfs-kernel-server
+    state: restarted

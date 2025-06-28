@@ -1,0 +1,45 @@
+# ansible/roles/app_server/tasks/main.yml
+---
+- name: Install apache2
+  ansible.builtin.apt:
+    name: apache2
+    state: present
+
+- name: Create custom index.html
+  ansible.builtin.template:
+    src: index.html.j2 
+    dest: /var/www/html/index.html
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart apache2
+
+- name: Install autofs
+  ansible.builtin.apt:
+    name: autofs
+    state: present
+
+- name: Ensure /etc/auto.master.d directory exists
+  ansible.builtin.file:
+    path: /etc/auto.master.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Ensure NFS mount point /var/nfs exists
+  ansible.builtin.file:
+    path: /var/nfs
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+
+- name: Configure autofs for NFS mount
+  ansible.builtin.copy:
+    content: "/var/nfs -fstype=nfs,rw,sync 192.168.56.1{{ matricula1_ultimos_digitos }}:/dados/nfs" # Usar o IP do servidor ARQ
+    dest: /etc/auto.master.d/nfs_mount.autofs
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart autofs

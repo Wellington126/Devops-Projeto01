@@ -1,0 +1,30 @@
+# ansible/roles/arq_server/templates/dhcpd.conf.j2
+
+# Configuração global
+option domain-name "{{ nome1 }}.{{ nome2 }}.devops";
+option domain-name-servers 1.1.1.1, 8.8.8.8;
+default-lease-time 600;
+max-lease-time 7200;
+ddns-update-style none;
+authoritative;
+log-facility local7;
+
+# Sub-rede para a rede privada do Vagrant
+subnet 192.168.56.0 netmask 255.255.255.0 {
+  range 192.168.56.50 192.168.56.100;
+  option routers 192.168.56.1; # Gateway padrão
+  option broadcast-address 192.168.56.255;
+}
+
+# Configuração de hosts fixos (reservas DHCP)
+# Servidor db
+host db {
+  hardware ethernet 08:00:27:dc:12:2a; 
+  fixed-address 192.168.56.1{{ matricula2_ultimos_digitos }};
+}
+
+# Servidor app
+host app {
+  hardware ethernet 08:00:27:49:46:86; 
+  fixed-address 192.168.56.1{{ matricula_xy }};
+}

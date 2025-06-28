@@ -1,0 +1,31 @@
+# ansible/playbooks/site.yml
+---
+- name: Configure all VMs with common settings
+  hosts: arq, db, app, cli
+  become: yes 
+  roles:
+    - common
+
+- name: Configure arq server
+  hosts: arq
+  become: yes
+  roles:
+    - arq_server
+
+- name: Configure db server
+  hosts: db
+  become: yes
+  roles:
+    - db_server
+
+- name: Configure app server
+  hosts: app
+  become: yes
+  roles:
+    - app_server
+
+- name: Configure cli host
+  hosts: cli
+  become: yes
+  roles:
+    - cli_host

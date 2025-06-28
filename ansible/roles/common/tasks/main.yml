@@ -1,0 +1,130 @@
+# ansible/roles/common/tasks/main.yml
+---
+- name: Update apt cache and upgrade all packages
+  ansible.builtin.apt:
+    update_cache: yes
+    upgrade: dist
+    autoclean: yes
+    autoremove: yes
+
+- name: Install Chrony (NTP server)
+  ansible.builtin.apt:
+    name: chrony
+    state: present
+
+- name: Configure Chrony to use pool.ntp.br
+  ansible.builtin.copy:
+    content: |
+      pool pool.ntp.br iburst
+      makestep 1.0 -1
+      rtcsync
+      # Adicione outras configurações padrão se desejar
+    dest: /etc/chrony/chrony.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart chrony
+
+- name: Set timezone to America/Recife
+  community.general.timezone:
+    name: America/Recife
+
+- name: Create 'ifpb' group
+  ansible.builtin.group:
+    name: ifpb
+    state: present
+
+- name: Create user '{{ nome1 }}' and add to 'ifpb' group
+  ansible.builtin.user:
+    name: "{{ nome1 }}"
+    state: present
+    groups: ifpb,sudo # Adiciona ao grupo ifpb e sudo para acesso
+    append: yes
+    shell: /bin/bash # Define o shell padrão
+
+- name: Create user '{{ nome2 }}' and add to 'ifpb' group
+  ansible.builtin.user:
+    name: "{{ nome2 }}"
+    state: present
+    groups: ifpb,sudo
+    append: yes
+    shell: /bin/bash
+
+- name: Ensure .ssh directory exists for {{ nome1 }}
+  ansible.builtin.file:
+    path: "/home/{{ nome1 }}/.ssh"
+    state: directory
+    owner: "{{ nome1 }}"
+    group: "{{ nome1 }}"
+    mode: '0700'
+
+- name: Copy public key for {{ nome1 }} (Assumindo que a chave está em files/)
+  ansible.builtin.copy:
+    src: "id_rsa_{{ nome1 }}.pub" 
+    dest: "/home/{{ nome1 }}/.ssh/authorized_keys"
+    owner: "{{ nome1 }}"
+    group: "{{ nome1 }}"
+    mode: '0600'
+
+- name: Ensure .ssh directory exists for {{ nome2 }}
+  ansible.builtin.file:
+    path: "/home/{{ nome2 }}/.ssh"
+    state: directory
+    owner: "{{ nome2 }}"
+    group: "{{ nome2 }}"
+    mode: '0700'
+
+- name: Copy public key for {{ nome2 }} (Assumindo que a chave está em files/)
+  ansible.builtin.copy:
+    src: "id_rsa_{{ nome2 }}.pub" # Você precisará ter este arquivo em ansible/roles/common/files/
+    dest: "/home/{{ nome2 }}/.ssh/authorized_keys"
+    owner: "{{ nome2 }}"
+    group: "{{ nome2 }}"
+    mode: '0600'
+
+# Configuração do servidor SSH
+- name: Ensure SSH server is configured
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    state: present
+    backup: yes
+  loop:
+    - { regexp: '^PermitRootLogin', line: 'PermitRootLogin no' } # Bloquear acesso ao usuário root via SSH
+    - { regexp: '^PasswordAuthentication', line: 'PasswordAuthentication no' } # Permitir apenas autenticação por chaves públicas
+    - { regexp: '^AllowGroups', line: 'AllowGroups vagrant ifpb' } # Permitir acesso apenas a usuários pertencentes aos grupos vagrant e ifpb
+  notify: Restart ssh
+
+- name: Add SSH banner message
+  ansible.builtin.copy:
+    content: |
+      Acesso apenas para pessoas com autorizacao expressa.
+      Seu acesso esta sendo monitorado !!!
+    dest: /etc/issue.net
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart ssh # Recarregar SSH para que a mensagem seja aplicada
+
+- name: Ensure SSHD uses banner
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?Banner /etc/issue.net'
+    line: 'Banner /etc/issue.net'
+    state: present
+    backup: yes
+  notify: Restart ssh
+
+- name: Install NFS client
+  ansible.builtin.apt:
+    name: nfs-common
+    state: present
+
+- name: Allow 'ifpb' group users to have root access using sudo
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers.d/ifpb_sudo
+    line: '%ifpb ALL=(ALL) NOPASSWD: ALL'
+    create: yes
+    mode: '0440'
+    validate: '/usr/sbin/visudo -cf %s' # Valida a sintaxe antes de salvar

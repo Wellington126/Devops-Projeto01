@@ -1,0 +1,47 @@
+# ansible/roles/cli_host/tasks/main.yml
+---
+- name: Install firefox-esr and xauth
+  ansible.builtin.apt:
+    name:
+      - firefox-esr
+      - xauth
+    state: present
+
+- name: Enable X11 forwarding in SSH server
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?X11Forwarding'
+    line: 'X11Forwarding yes'
+    state: present
+    backup: yes
+  notify: Restart ssh
+
+- name: Install autofs
+  ansible.builtin.apt:
+    name: autofs
+    state: present
+
+- name: Ensure /etc/auto.master.d directory exists
+  ansible.builtin.file:
+    path: /etc/auto.master.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Ensure NFS mount point /var/nfs exists
+  ansible.builtin.file:
+    path: /var/nfs
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+
+- name: Configure autofs for NFS mount
+  ansible.builtin.copy:
+    content: "/var/nfs -fstype=nfs,rw,sync 192.168.56.1{{ matricula1_ultimos_digitos }}:/dados/nfs"
+    dest: /etc/auto.master.d/nfs_mount.autofs
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart autofs

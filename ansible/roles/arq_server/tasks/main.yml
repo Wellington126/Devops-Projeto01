@@ -1,0 +1,142 @@
+# ansible/roles/arq_server/tasks/main.yml
+---
+
+- name: Ensure /etc/dhcp directory exists
+  ansible.builtin.file:
+    path: /etc/dhcp
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+
+- name: Install isc-dhcp-server
+  ansible.builtin.apt:
+    name: isc-dhcp-server
+    state: present
+
+- name: Ensure /var/lib/dhcp directory exists and has correct permissions
+  ansible.builtin.file:
+    path: /var/lib/dhcp
+    state: directory
+    mode: '0755'
+    recurse: yes
+
+- name: Configure DHCP server (dhcpd.conf)
+  ansible.builtin.template:
+    src: dhcpd.conf.j2
+    dest: /etc/dhcp/dhcpd.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart isc-dhcp-server
+  register: dhcpd_conf_copy_result
+
+- name: Debug DHCP config copy result
+  ansible.builtin.debug:
+    var: dhcpd_conf_copy_resul
+
+- name: Configure DHCP default file (isc-dhcp-server)
+  ansible.builtin.lineinfile:
+    path: /etc/default/isc-dhcp-server
+    regexp: '^INTERFACESv4='
+    line: 'INTERFACESv4="enp0s8"'
+    state: present
+    backup: yes
+  notify: Restart isc-dhcp-server
+
+- name: Install lvm2 package
+  ansible.builtin.apt:
+    name: lvm2
+    state: present
+
+- name: Initialize physical volumes (PVs)
+  ansible.builtin.shell: |
+    pvcreate /dev/sdb
+    pvcreate /dev/sdc
+    pvcreate /dev/sdd
+  args:
+    creates: /dev/sdb
+  register: pv_output
+  failed_when: "'already exists' not in pv_output.stderr and pv_output.rc != 0"
+  changed_when: "'already exists' not in pv_output.stderr and pv_output.rc == 0"
+
+
+- name: Create Volume Group (VG) 'dados'
+  ansible.builtin.shell: |
+    vgcreate dados /dev/sdb /dev/sdc /dev/sdd
+  args:
+    creates: /dev/mapper/dados
+  register: vg_output
+  failed_when: "'already exists' not in vg_output.stderr and vg_output.rc != 0"
+  changed_when: "'already exists' not in vg_output.stderr and vg_output.rc == 0"
+  notify: Vg change
+
+- name: Create Logical Volume (LV) 'ifpb' with 15GB
+  ansible.builtin.shell: |
+    lvcreate -L 15G -n ifpb dados
+  args:
+    creates: /dev/dados/ifpb
+  register: lv_output
+  failed_when: "'already exists' not in lv_output.stderr and lv_output.rc != 0"
+  changed_when: "'already exists' not in lv_output.stderr and lv_output.rc == 0"
+  notify: Lv change
+
+- name: Format LV 'ifpb' with ext4 filesystem
+  ansible.builtin.filesystem:
+    fstype: ext4
+    dev: /dev/dados/ifpb
+    force: no
+  notify: Lv change
+
+- name: Create mount point /dados
+  ansible.builtin.file:
+    path: /dados
+    state: directory
+    mode: '0755'
+
+- name: Mount /dados automatically at boot
+  ansible.builtin.mount:
+    path: /dados
+    src: /dev/mapper/dados-ifpb
+    fstype: ext4
+    opts: defaults
+    state: mounted
+
+# Configuração NFS Server
+- name: Install nfs-kernel-server
+  ansible.builtin.apt:
+    name: nfs-kernel-server
+    state: present
+
+- name: Create NFS share directory /dados/nfs
+  ansible.builtin.file:
+    path: /dados/nfs
+    state: directory
+    mode: '0777'
+
+- name: Create user nfs-ifpb
+  ansible.builtin.user:
+    name: nfs-ifpb
+    state: present
+    shell: /sbin/nologin
+    create_home: no
+
+- name: Set ownership of /dados/nfs to nfs-ifpb
+  ansible.builtin.file:
+    path: /dados/nfs
+    owner: nfs-ifpb
+    group: nfs-ifpb
+    recurse: yes
+
+- name: Configure NFS exports
+  ansible.builtin.lineinfile:
+    path: /etc/exports
+    line: '/dados/nfs 192.168.56.0/24(rw,sync,no_subtree_check,all_squash,anonuid={{ ansible_facts.users.nfs_ifpb.uid | default(65534) }},anongid={{ ansible_facts.users.nfs_ifpb.gid | default(65534) }})'
+    state: present
+    backup: yes
+  notify: Restart nfs-kernel-server
+
+- name: Export NFS shares immediately
+  ansible.builtin.command: exportfs -a
+  changed_when: true
