@@ -3,6 +3,7 @@
 ## 1. Informações do Projeto
 
 * **Instituição:** IFPB Campus João Pessoa
+* **Curso:** Redes de Computadores
 * **Professor:** Leonidas Francisco de Lima Júnior
 * **Disciplina:** Adminstração de Sistemas Abertos
 * **Período:** 2025.1 
